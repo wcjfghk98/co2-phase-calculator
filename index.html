@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CO2 상 계산기</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Carbon Dioxide Phase Calculator</p>
+          <h1>CO2 상 계산기</h1>
+        </div>
+        <div class="critical">
+          <span>임계점</span>
+          <strong>31.0°C · 73.8 bar</strong>
+        </div>
+      </section>
+
+      <section class="panel controls" aria-label="입력">
+        <label class="field">
+          <span>온도</span>
+          <div class="input-row">
+            <input id="temperature" type="number" inputmode="decimal" placeholder="예: 25" step="0.1" />
+            <span>°C</span>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>압력</span>
+          <div class="input-row">
+            <input id="pressure" type="number" inputmode="decimal" placeholder="예: 80" step="0.1" min="0" />
+            <span>bar</span>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>원하는 상</span>
+          <select id="targetPhase">
+            <option value="" selected>선택</option>
+            <option value="supercritical">초임계</option>
+            <option value="gas">기체</option>
+            <option value="liquid">액체</option>
+            <option value="solid">고체</option>
+          </select>
+        </label>
+
+        <div class="actions">
+          <button id="reset" class="ghost" type="button" aria-label="초기화">초기화</button>
+        </div>
+      </section>
+
+      <section class="result" aria-live="polite">
+        <div class="phase-chip" id="phaseChip">조건을 입력하세요</div>
+        <h2 id="resultTitle">온도와 압력을 입력하거나, 한 조건과 원하는 상을 선택해 주세요.</h2>
+        <p id="resultDetail">두 값을 모두 넣으면 현재 상을 판정하고 상평형도에 포인트를 표시합니다.</p>
+      </section>
+
+      <section class="panel diagram-panel" aria-label="CO2 상평형도">
+        <div class="diagram-head">
+          <h2>상평형도</h2>
+        </div>
+        <svg id="phaseDiagram" viewBox="0 0 720 520" role="img" aria-label="이산화탄소 상평형도"></svg>
+      </section>
+
+      <section class="notes">
+        <p>순수 CO2 기준의 근사 계산입니다. 그래프는 0-200°C, 0-200 bar 범위를 선형 축으로 표시합니다.</p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

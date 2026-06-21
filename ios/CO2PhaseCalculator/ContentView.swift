@@ -300,10 +300,7 @@ enum CO2Model {
         guard let density = densityKgM3(celsius: celsius, bar: bar, phase: phase) else {
             return "밀도는 계산할 수 없습니다."
         }
-        let qualifier = phase == .solid
-            ? "Peng-Robinson 유체 EOS 근사값이라 고체 조건에서는 참고용입니다."
-            : "Peng-Robinson EOS 근사값입니다."
-        return "밀도: \(formatDensity(density)) (\(qualifier))"
+        return "밀도: \(formatDensity(density))"
     }
 }
 

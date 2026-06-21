@@ -327,10 +327,7 @@ function fmtDensity(value) {
 function densityDetail(celsius, bar, phase) {
   const density = co2DensityKgM3(celsius, bar, phase);
   if (!density || !Number.isFinite(density.value)) return "밀도는 계산할 수 없습니다.";
-  const qualifier = phase === "solid" && density.method.includes("Peng-Robinson")
-    ? "Peng-Robinson 유체 EOS fallback이라 고체 조건에서는 참고용입니다."
-    : density.method;
-  return `밀도: ${fmtDensity(density.value)} (${qualifier})`;
+  return `밀도: ${fmtDensity(density.value)}`;
 }
 
 function readNumber(input) {

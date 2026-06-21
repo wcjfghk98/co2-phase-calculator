@@ -328,7 +328,7 @@ function calculate() {
     const densityText = densityDetail(temperature, pressure, state.phase);
     updateResult(phases[state.phase], state.phase === "boundary" ? "" : state.phase,
       `${fmtC(temperature)}, ${fmtBar(pressure)}에서는 ${phases[state.phase]}입니다.`,
-      `${state.note} ${densityText}`);
+      `${state.note}\n${densityText}`);
     drawDiagram({ celsius: temperature, bar: pressure });
     return;
   }

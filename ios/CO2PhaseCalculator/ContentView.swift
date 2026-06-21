@@ -331,7 +331,7 @@ struct ContentView: View {
                 phase.label,
                 phase.color,
                 "\(CO2Model.formatC(temperature)), \(CO2Model.formatBar(pressure))에서는 \(phase.label)입니다.",
-                "\(state.note) \(densityText)",
+                "\(state.note)\n\(densityText)",
                 ChartMarker(celsius: temperature, bar: pressure)
             )
         }

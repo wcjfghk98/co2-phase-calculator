@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum Phase: String, CaseIterable, Identifiable {
@@ -48,6 +49,8 @@ enum CO2Model {
     static let criticalC = 30.9782
     static let criticalBar = 73.773
     static let gasConstant = 8.314462618
+    static let molarMassKgPerMol = 0.0440095
+    static let acentricFactor = 0.22394
     static let sublimationHeat = 25230.0
 
     static let minC = 0.0
@@ -82,6 +85,55 @@ enum CO2Model {
         let aBar = 4030.0
         let b = 2.58
         return tripleBar + aBar * (pow(kelvin / tripleK, b) - 1)
+    }
+
+    static func densityKgM3(celsius: Double, bar: Double, phase: Phase) -> Double? {
+        let kelvin = cToK(celsius)
+        let pressurePa = bar * 100000
+        guard kelvin.isFinite, pressurePa.isFinite, kelvin > 0, pressurePa > 0 else { return nil }
+
+        let r = gasConstant
+        let tc = criticalK
+        let pc = criticalBar * 100000
+        let omega = acentricFactor
+        let kappa = 0.37464 + 1.54226 * omega - 0.26992 * pow(omega, 2)
+        let alpha = pow(1 + kappa * (1 - sqrt(kelvin / tc)), 2)
+        let a = 0.45724 * pow(r, 2) * pow(tc, 2) * alpha / pc
+        let b = 0.07780 * r * tc / pc
+        let A = a * pressurePa / (pow(r, 2) * pow(kelvin, 2))
+        let B = b * pressurePa / (r * kelvin)
+        let roots = cubicRealRoots(
+            a: -(1 - B),
+            b: A - 3 * pow(B, 2) - 2 * B,
+            c: -(A * B - pow(B, 2) - pow(B, 3))
+        )
+        .filter { $0.isFinite && $0 > B && $0 > 0 }
+        .sorted()
+
+        guard let z = (phase == .liquid || phase == .solid ? roots.first : roots.last) else { return nil }
+        return pressurePa * molarMassKgPerMol / (z * r * kelvin)
+    }
+
+    static func cubicRealRoots(a: Double, b: Double, c: Double) -> [Double] {
+        let p = b - pow(a, 2) / 3
+        let q = 2 * pow(a, 3) / 27 - a * b / 3 + c
+        let discriminant = pow(q / 2, 2) + pow(p / 3, 3)
+
+        if discriminant > 1e-12 {
+            let sqrtD = sqrt(discriminant)
+            return [cbrt(-q / 2 + sqrtD) + cbrt(-q / 2 - sqrtD) - a / 3]
+        }
+
+        if abs(discriminant) <= 1e-12 {
+            let u = cbrt(-q / 2)
+            return [2 * u - a / 3, -u - a / 3]
+        }
+
+        let radius = 2 * sqrt(-p / 3)
+        let angle = acos((3 * q / (2 * p)) * sqrt(-3 / p))
+        return (0...2).map { k in
+            radius * cos((angle - 2 * .pi * Double(k)) / 3) - a / 3
+        }
     }
 
     static func nearlyEqual(_ a: Double, _ b: Double, tolerance: Double = 0.01) -> Bool {
@@ -236,6 +288,23 @@ enum CO2Model {
     static func formatC(_ value: Double) -> String {
         String(format: "%.1f°C", value)
     }
+
+    static func formatDensity(_ value: Double) -> String {
+        guard value.isFinite else { return "-" }
+        if value >= 100 { return "\(Int(value.rounded())) kg/m³" }
+        if value >= 10 { return String(format: "%.1f kg/m³", value) }
+        return String(format: "%.2f kg/m³", value)
+    }
+
+    static func densityDetail(celsius: Double, bar: Double, phase: Phase) -> String {
+        guard let density = densityKgM3(celsius: celsius, bar: bar, phase: phase) else {
+            return "밀도는 계산할 수 없습니다."
+        }
+        let qualifier = phase == .solid
+            ? "Peng-Robinson 유체 EOS 근사값이라 고체 조건에서는 참고용입니다."
+            : "Peng-Robinson EOS 근사값입니다."
+        return "밀도: \(formatDensity(density)) (\(qualifier))"
+    }
 }
 
 struct ContentView: View {
@@ -257,11 +326,12 @@ struct ContentView: View {
             guard let phase = state.phase else {
                 return ("입력 확인", Color(.systemGray5), "계산할 수 없는 조건입니다.", state.note, nil)
             }
+            let densityText = CO2Model.densityDetail(celsius: temperature, bar: pressure, phase: phase)
             return (
                 phase.label,
                 phase.color,
                 "\(CO2Model.formatC(temperature)), \(CO2Model.formatBar(pressure))에서는 \(phase.label)입니다.",
-                state.note,
+                "\(state.note) \(densityText)",
                 ChartMarker(celsius: temperature, bar: pressure)
             )
         }

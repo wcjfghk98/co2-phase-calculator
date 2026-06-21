@@ -6,6 +6,8 @@ const constants = {
   criticalC: 30.9782,
   criticalBar: 73.773,
   gasConstant: 8.314462618,
+  molarMassKgPerMol: 0.0440095,
+  acentricFactor: 0.22394,
   sublimationHeat: 25230
 };
 
@@ -63,6 +65,54 @@ function meltingPressureBar(kelvin) {
   const aBar = 4030;
   const b = 2.58;
   return constants.tripleBar + aBar * ((kelvin / constants.tripleK) ** b - 1);
+}
+
+function co2DensityKgM3(celsius, bar, phase) {
+  const kelvin = cToK(celsius);
+  const pressurePa = bar * 100000;
+  if (!Number.isFinite(kelvin) || !Number.isFinite(pressurePa) || kelvin <= 0 || pressurePa <= 0) {
+    return null;
+  }
+
+  const r = constants.gasConstant;
+  const tc = constants.criticalK;
+  const pc = constants.criticalBar * 100000;
+  const omega = constants.acentricFactor;
+  const kappa = 0.37464 + 1.54226 * omega - 0.26992 * omega ** 2;
+  const alpha = (1 + kappa * (1 - Math.sqrt(kelvin / tc))) ** 2;
+  const a = 0.45724 * r ** 2 * tc ** 2 * alpha / pc;
+  const b = 0.07780 * r * tc / pc;
+  const A = a * pressurePa / (r ** 2 * kelvin ** 2);
+  const B = b * pressurePa / (r * kelvin);
+  const roots = cubicRealRoots(
+    -(1 - B),
+    A - 3 * B ** 2 - 2 * B,
+    -(A * B - B ** 2 - B ** 3)
+  ).filter((z) => Number.isFinite(z) && z > B && z > 0).sort((aRoot, bRoot) => aRoot - bRoot);
+
+  if (!roots.length) return null;
+  const z = phase === "liquid" || phase === "solid" ? roots[0] : roots[roots.length - 1];
+  return pressurePa * constants.molarMassKgPerMol / (z * r * kelvin);
+}
+
+function cubicRealRoots(a, b, c) {
+  const p = b - a ** 2 / 3;
+  const q = (2 * a ** 3) / 27 - (a * b) / 3 + c;
+  const discriminant = (q / 2) ** 2 + (p / 3) ** 3;
+
+  if (discriminant > 1e-12) {
+    const sqrtD = Math.sqrt(discriminant);
+    return [Math.cbrt(-q / 2 + sqrtD) + Math.cbrt(-q / 2 - sqrtD) - a / 3];
+  }
+
+  if (Math.abs(discriminant) <= 1e-12) {
+    const u = Math.cbrt(-q / 2);
+    return [2 * u - a / 3, -u - a / 3];
+  }
+
+  const radius = 2 * Math.sqrt(-p / 3);
+  const angle = Math.acos((3 * q / (2 * p)) * Math.sqrt(-3 / p));
+  return [0, 1, 2].map((k) => radius * Math.cos((angle - 2 * Math.PI * k) / 3) - a / 3);
 }
 
 function nearlyEqual(a, b, tolerance = 0.01) {
@@ -229,6 +279,22 @@ function fmtC(value) {
   return `${value.toFixed(1)}°C`;
 }
 
+function fmtDensity(value) {
+  if (!Number.isFinite(value)) return "-";
+  if (value >= 100) return `${Math.round(value).toLocaleString("ko-KR")} kg/m³`;
+  if (value >= 10) return `${value.toFixed(1)} kg/m³`;
+  return `${value.toFixed(2)} kg/m³`;
+}
+
+function densityDetail(celsius, bar, phase) {
+  const density = co2DensityKgM3(celsius, bar, phase);
+  if (!Number.isFinite(density)) return "밀도는 계산할 수 없습니다.";
+  const qualifier = phase === "solid"
+    ? "Peng-Robinson 유체 EOS 근사값이라 고체 조건에서는 참고용입니다."
+    : "Peng-Robinson EOS 근사값입니다.";
+  return `밀도: ${fmtDensity(density)} (${qualifier})`;
+}
+
 function readNumber(input) {
   if (input.value.trim() === "") return null;
   const value = Number(input.value);
@@ -259,9 +325,10 @@ function calculate() {
       drawDiagram(null);
       return;
     }
+    const densityText = densityDetail(temperature, pressure, state.phase);
     updateResult(phases[state.phase], state.phase === "boundary" ? "" : state.phase,
       `${fmtC(temperature)}, ${fmtBar(pressure)}에서는 ${phases[state.phase]}입니다.`,
-      state.note);
+      `${state.note} ${densityText}`);
     drawDiagram({ celsius: temperature, bar: pressure });
     return;
   }

@@ -68,6 +68,11 @@ function meltingPressureBar(kelvin) {
 }
 
 function co2DensityKgM3(celsius, bar, phase) {
+  const tableDensity = co2DensityFromTable(celsius, bar);
+  if (tableDensity !== null) {
+    return { value: tableDensity, method: "CoolProp/Span-Wagner급 물성 테이블 보간값입니다." };
+  }
+
   const kelvin = cToK(celsius);
   const pressurePa = bar * 100000;
   if (!Number.isFinite(kelvin) || !Number.isFinite(pressurePa) || kelvin <= 0 || pressurePa <= 0) {
@@ -92,7 +97,40 @@ function co2DensityKgM3(celsius, bar, phase) {
 
   if (!roots.length) return null;
   const z = phase === "liquid" || phase === "solid" ? roots[0] : roots[roots.length - 1];
-  return pressurePa * constants.molarMassKgPerMol / (z * r * kelvin);
+  return {
+    value: pressurePa * constants.molarMassKgPerMol / (z * r * kelvin),
+    method: "Peng-Robinson EOS fallback 근사값입니다."
+  };
+}
+
+function co2DensityFromTable(celsius, bar) {
+  const table = window.CO2_DENSITY_TABLE;
+  if (!table || !Array.isArray(table.densityKgM3)) return null;
+  if (!Number.isFinite(celsius) || !Number.isFinite(bar)) return null;
+  if (celsius < 0 || celsius > 200 || bar < 1 || bar > 200) return null;
+
+  const t0 = Math.floor(celsius);
+  const t1 = Math.min(200, Math.ceil(celsius));
+  const p0 = Math.floor(bar);
+  const p1 = Math.min(200, Math.ceil(bar));
+  const ft = t1 === t0 ? 0 : (celsius - t0) / (t1 - t0);
+  const fp = p1 === p0 ? 0 : (bar - p0) / (p1 - p0);
+  const d00 = tableDensityAt(t0, p0);
+  const d10 = tableDensityAt(t1, p0);
+  const d01 = tableDensityAt(t0, p1);
+  const d11 = tableDensityAt(t1, p1);
+
+  if (![d00, d10, d01, d11].every(Number.isFinite)) return null;
+  const d0 = d00 + (d10 - d00) * ft;
+  const d1 = d01 + (d11 - d01) * ft;
+  return d0 + (d1 - d0) * fp;
+}
+
+function tableDensityAt(celsiusInt, barInt) {
+  const table = window.CO2_DENSITY_TABLE;
+  const tempIndex = celsiusInt;
+  const pressureIndex = barInt - 1;
+  return table.densityKgM3[tempIndex * 200 + pressureIndex];
 }
 
 function cubicRealRoots(a, b, c) {
@@ -281,18 +319,18 @@ function fmtC(value) {
 
 function fmtDensity(value) {
   if (!Number.isFinite(value)) return "-";
-  if (value >= 100) return `${Math.round(value).toLocaleString("ko-KR")} kg/m³`;
+  if (value >= 100) return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} kg/m³`;
   if (value >= 10) return `${value.toFixed(1)} kg/m³`;
   return `${value.toFixed(2)} kg/m³`;
 }
 
 function densityDetail(celsius, bar, phase) {
   const density = co2DensityKgM3(celsius, bar, phase);
-  if (!Number.isFinite(density)) return "밀도는 계산할 수 없습니다.";
-  const qualifier = phase === "solid"
-    ? "Peng-Robinson 유체 EOS 근사값이라 고체 조건에서는 참고용입니다."
-    : "Peng-Robinson EOS 근사값입니다.";
-  return `밀도: ${fmtDensity(density)} (${qualifier})`;
+  if (!density || !Number.isFinite(density.value)) return "밀도는 계산할 수 없습니다.";
+  const qualifier = phase === "solid" && density.method.includes("Peng-Robinson")
+    ? "Peng-Robinson 유체 EOS fallback이라 고체 조건에서는 참고용입니다."
+    : density.method;
+  return `밀도: ${fmtDensity(density.value)} (${qualifier})`;
 }
 
 function readNumber(input) {
